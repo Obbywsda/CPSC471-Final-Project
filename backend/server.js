@@ -114,6 +114,58 @@ app.put('/api/vehicles/:vin', async (req, res) => {
   }
 });
 
+// Getting employees
+app.get('/api/employees', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM employee ORDER BY employee_id');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching employees:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Getting employee by ID
+app.get('/api/employees/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT * FROM employee WHERE employee_id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching employee:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Getting all locations
+app.get('/api/locations', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM location ORDER BY location_code');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching locations:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Getting all customers
+app.get('/api/customers', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM customer ORDER BY customer_id');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching customers:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 app.get('/api/events/:vin', async (req, res) => {
   try {
