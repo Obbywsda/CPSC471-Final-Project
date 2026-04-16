@@ -9,7 +9,10 @@ export const vehicleApi = {
   search: (q) => api.get(`/vehicles/search?q=${encodeURIComponent(q)}`),
   getByVin: (vin) => api.get(`/vehicles/${vin}`),
   getRegistration: (vin) => api.get(`/vehicles/${vin}/registration`),
+  getHolds: (vin) => api.get(`/vehicles/${vin}/holds`),
   update: (vin, data) => api.put(`/vehicles/${vin}`, data),
+  create: (data) => api.post('/vehicles', data),
+  delete: (vin) => api.delete(`/vehicles/${vin}`),
 };
 
 export const eventApi = {
@@ -20,6 +23,17 @@ export const eventApi = {
 export const conditionApi = {
   getById: (eventId) => api.get(`/conditions/${eventId}`),
   getDamages: (vin) => api.get(`/conditions/damages/${vin}`),
+};
+
+export const maintenanceApi = {
+  getTasks: () => api.get('/maintenance/tasks'),
+  getStats: () => api.get('/maintenance/stats'),
+};
+
+export const reservationApi = {
+  getAll: () => api.get('/reservations'),
+  getStats: () => api.get('/reservations/stats'),
+  create: (data) => api.post('/reservations', data),
 };
 
 export const employeeApi = {
