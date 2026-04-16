@@ -50,11 +50,21 @@ function ManagerDashboard({ canEdit }) {
   if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading dashboard...</div></Layout>;
 
   const v = selectedVehicle;
-  const healthScore = v ? Math.min(100, Math.max(50, 100 - Math.floor((v.odometer || 0) / 1000))) : 94;
+  const totalFleet = vehicles.length;
+  const availableVehicles = vehicles.filter((vehicle) => (
+    vehicle.status === 'Available'
+    && Number(vehicle.active_hold_count || 0) === 0
+    && Number(vehicle.active_maintenance_count || 0) === 0
+    && Number(vehicle.active_rental_count || 0) === 0
+    && Number(vehicle.damage_count || 0) === 0
+  )).length;
+  const unavailableVehicles = Math.max(totalFleet - availableVehicles, 0);
+  const healthScore = totalFleet > 0 ? Math.round((availableVehicles / totalFleet) * 100) : 0;
   const recentEvents = events.slice(0, 3);
   const latestInspection = events.find((event) => event.event_type === 'condition_check');
   const openIssues = events.filter((event) => event.event_type === 'hold' || event.event_type === 'maintenance').length;
   const reportedDamages = events.reduce((count, event) => count + (Number(event.damage_count) || 0), 0);
+  const statusLabel = v?.status === 'Available' ? 'ACTIVE' : (v?.status || 'UNKNOWN').toUpperCase();
 
   return (
     <Layout title="Concourse Fleet">
@@ -64,11 +74,7 @@ function ManagerDashboard({ canEdit }) {
           <div className="vehicle-header">
             <div className="vehicle-header__main">
               <div className="vehicle-header__badges">
-                <span className="badge badge--active">ACTIVE</span>
-                {v.status === 'Available' && <span className="badge badge--optimal">OPTIMAL</span>}
-                {v.status === 'On Hold' && <span className="badge badge--hold">ON HOLD</span>}
-                {v.status === 'In Maintenance' && <span className="badge badge--maintenance">MAINTENANCE</span>}
-                {v.status === 'Rented' && <span className="badge badge--in-transit">RENTED</span>}
+                <span className={`badge ${getVehicleStatusClass(v.status)}`}>{statusLabel}</span>
               </div>
               <h1 className="vehicle-header__title">{v.year} {v.make} {v.model}</h1>
               <p className="vehicle-header__subtitle">
@@ -100,10 +106,10 @@ function ManagerDashboard({ canEdit }) {
               </div>
             </div>
             <div className="score-card" style={{ minWidth: 200 }}>
-              <div className="score-card__label">Fleet Health Index</div>
+              <div className="score-card__label">Fleet Availability Index</div>
               <div className="score-card__value">{healthScore}<span>%</span></div>
               <div className="score-card__desc">
-                {healthScore >= 90 ? 'Your fleet is operating above regional efficiency benchmarks.' : 'Below optimal range. Attention recommended.'}
+                {availableVehicles} of {totalFleet} vehicles are active and available to rent. {unavailableVehicles} unavailable.
               </div>
               <div className="score-card__bar">
                 <div className="score-card__bar-fill" style={{ width: `${healthScore}%` }} />

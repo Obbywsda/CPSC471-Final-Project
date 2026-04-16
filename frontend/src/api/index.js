@@ -4,25 +4,27 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({ baseURL: API_BASE });
 
+const pathPart = (value) => encodeURIComponent(value);
+
 export const vehicleApi = {
   getAll: () => api.get('/vehicles'),
   search: (q) => api.get(`/vehicles/search?q=${encodeURIComponent(q)}`),
-  getByVin: (vin) => api.get(`/vehicles/${vin}`),
-  getRegistration: (vin) => api.get(`/vehicles/${vin}/registration`),
-  getHolds: (vin) => api.get(`/vehicles/${vin}/holds`),
-  update: (vin, data) => api.put(`/vehicles/${vin}`, data),
+  getByVin: (vin) => api.get(`/vehicles/${pathPart(vin)}`),
+  getRegistration: (vin) => api.get(`/vehicles/${pathPart(vin)}/registration`),
+  getHolds: (vin) => api.get(`/vehicles/${pathPart(vin)}/holds`),
+  update: (vin, data) => api.put(`/vehicles/${pathPart(vin)}`, data),
   create: (data) => api.post('/vehicles', data),
-  delete: (vin) => api.delete(`/vehicles/${vin}`),
+  delete: (vin) => api.delete(`/vehicles/${pathPart(vin)}`),
 };
 
 export const eventApi = {
-  getByVehicle: (vin) => api.get(`/events/vehicle/${vin}`),
+  getByVehicle: (vin) => api.get(`/events/vehicle/${pathPart(vin)}`),
   create: (data) => api.post('/events', data),
 };
 
 export const conditionApi = {
   getById: (eventId) => api.get(`/conditions/${eventId}`),
-  getDamages: (vin) => api.get(`/conditions/damages/${vin}`),
+  getDamages: (vin) => api.get(`/conditions/damages/${pathPart(vin)}`),
 };
 
 export const maintenanceApi = {

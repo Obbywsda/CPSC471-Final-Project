@@ -6,7 +6,7 @@ import { vehicleApi, eventApi, locationApi, conditionApi } from '../api';
 import { formatDate, formatDateTime, formatNumber, getEventLabel, getVehicleStatusClass } from '../utils/formatters';
 import {
   Download, Save, ChevronRight, Camera, MapPin,
-  AlertTriangle, Eye, Plus, Filter,
+  AlertTriangle, Eye, Plus, Filter, Search, Trash2,
 } from 'lucide-react';
 
 export default function FleetInventory() {
@@ -27,13 +27,23 @@ function FleetList({ canEdit, isMechanic }) {
   const [vehicles, setVehicles] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const loadFleet = useCallback(async () => {
-    setLoading(true);
+  const loadFleet = useCallback(async (term = '') => {
+    const searchTerm = term.trim();
+    if (searchTerm) {
+      setSearchLoading(true);
+    } else {
+      setLoading(true);
+    }
     try {
+      const vehicleRequest = searchTerm
+        ? vehicleApi.search(searchTerm)
+        : vehicleApi.getAll();
       const [vehicleResponse, locationResponse] = await Promise.all([
-        vehicleApi.getAll(),
+        vehicleRequest,
         locationApi.getAll(),
       ]);
       setVehicles(vehicleResponse.data);
@@ -42,12 +52,17 @@ function FleetList({ canEdit, isMechanic }) {
       console.error(error);
     } finally {
       setLoading(false);
+      setSearchLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadFleet();
-  }, [loadFleet]);
+    const timeout = setTimeout(() => {
+      loadFleet(searchQuery);
+    }, searchQuery.trim() ? 250 : 0);
+
+    return () => clearTimeout(timeout);
+  }, [loadFleet, searchQuery]);
 
   if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading fleet...</div></Layout>;
 
@@ -61,6 +76,21 @@ function FleetList({ canEdit, isMechanic }) {
             <p className="page-header__subtitle">Manage and view all fleet vehicles</p>
           </div>
           <div className="page-header__actions">
+            <div className="fleet-search">
+              <Search size={16} className="fleet-search__icon" />
+              <input
+                className="fleet-search__input"
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search unit, plate, or VIN..."
+              />
+              {searchQuery && (
+                <button className="fleet-search__clear" onClick={() => setSearchQuery('')}>
+                  Clear
+                </button>
+              )}
+            </div>
             <button className="btn btn--ghost"><Filter size={16} /> Filter</button>
             {canEdit && (
               <button className="btn btn--primary" onClick={() => setShowAddModal(true)}>
@@ -78,6 +108,7 @@ function FleetList({ canEdit, isMechanic }) {
               <tr>
                 <th>Unit #</th>
                 <th>Vehicle</th>
+                <th>Plate</th>
                 <th>VIN</th>
                 <th>Status</th>
                 <th>Location</th>
@@ -91,6 +122,7 @@ function FleetList({ canEdit, isMechanic }) {
                 <tr key={v.vin} style={{ cursor: 'pointer' }} onClick={() => navigate(`/fleet/${v.vin}`)}>
                   <td style={{ fontWeight: 700 }}>{v.unit_number}</td>
                   <td>{v.year} {v.make} {v.model}</td>
+                  <td>{v.plate || 'N/A'}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>{v.vin.substring(0, 10)}...</td>
                   <td>
                     <span className={`badge ${getVehicleStatusClass(v.status)}`}>{v.status}</span>
@@ -101,11 +133,23 @@ function FleetList({ canEdit, isMechanic }) {
                   <td><button className="btn btn--ghost"><Eye size={16} /></button></td>
                 </tr>
               ))}
+              {!vehicles.length && (
+                <tr>
+                  <td colSpan="9">
+                    <div className="empty-state">
+                      No vehicles found for "{searchQuery}". Try a unit number, license plate, or VIN.
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="pagination">
-          <span>Showing {vehicles.length} vehicles</span>
+          <span>
+            {searchLoading ? 'Searching...' : `Showing ${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'}`}
+            {searchQuery.trim() ? ` for "${searchQuery.trim()}"` : ''}
+          </span>
           <div className="pagination__pages">
             <button className="pagination__btn pagination__btn--active">1</button>
           </div>
@@ -140,10 +184,13 @@ function ManagerVehicleDetail({ vin, canEdit }) {
   const [saving, setSaving] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [selectedHold, setSelectedHold] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setRegistration(null);
       const { data: v } = await vehicleApi.getByVin(vin);
       setVehicle(v);
       setForm({
@@ -151,12 +198,15 @@ function ManagerVehicleDetail({ vin, canEdit }) {
         unit_number: v.unit_number,
         odometer: v.odometer,
         location_code: v.location_code,
+        plate: v.plate || '',
       });
       try {
         const regRes = await vehicleApi.getRegistration(v.vin);
         if (regRes.data.length > 0) {
           setRegistration(regRes.data[0]);
           setForm(prev => ({ ...prev, plate: regRes.data[0].plate }));
+        } else {
+          setRegistration(null);
         }
       } catch {}
       try {
@@ -175,12 +225,17 @@ function ManagerVehicleDetail({ vin, canEdit }) {
 
   const handleSave = async () => {
     if (!canEdit) return;
+    if (!form.plate || !String(form.plate).trim()) {
+      alert('License plate is required.');
+      return;
+    }
     setSaving(true);
     try {
       await vehicleApi.update(vehicle.vin, {
         unit_number: form.unit_number,
         odometer: parseInt(form.odometer) || vehicle.odometer,
         location_code: form.location_code,
+        plate: form.plate,
       });
       await loadData();
     } catch (err) { alert('Error saving: ' + err.message); }
@@ -211,6 +266,24 @@ function ManagerVehicleDetail({ vin, canEdit }) {
 
   const removeHold = async (hold) => {
     await changeHold({ action: 'Remove', reason: hold.reason || hold.hold_reason || 'Hold cleared' });
+  };
+
+  const deleteVehicle = async () => {
+    if (!canEdit || !vehicle) return;
+    setDeleting(true);
+    try {
+      await vehicleApi.delete(vehicle.vin);
+      setShowDeleteModal(false);
+      navigate('/fleet');
+    } catch (error) {
+      const message = [
+        error.response?.data?.error,
+        error.response?.data?.detail,
+      ].filter(Boolean).join(' ');
+      alert(`Error deleting vehicle: ${message || error.message}`);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading vehicle...</div></Layout>;
@@ -264,6 +337,11 @@ function ManagerVehicleDetail({ vin, canEdit }) {
             </button>
           )}
           {canEdit && (
+            <button className="btn btn--danger" onClick={() => setShowDeleteModal(true)} disabled={saving || deleting}>
+              <Trash2 size={16} /> Delete
+            </button>
+          )}
+          {canEdit && (
             <button className="btn btn--primary" onClick={handleSave} disabled={saving}>
               <Save size={16} /> {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -294,7 +372,11 @@ function ManagerVehicleDetail({ vin, canEdit }) {
               <div className="form-row" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label>License Plate</label>
-                  <input value={form.plate || ''} readOnly style={{ opacity: 0.7 }} />
+                  <input
+                    value={form.plate || ''}
+                    onChange={(e) => setForm(p => ({ ...p, plate: e.target.value.toUpperCase() }))}
+                    readOnly={!canEdit}
+                  />
                 </div>
                 <div className="form-group">
                   <label>Current Odometer</label>
@@ -459,6 +541,15 @@ function ManagerVehicleDetail({ vin, canEdit }) {
             await removeHold(selectedHold);
             setSelectedHold(null);
           }}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteVehicleModal
+          vehicle={v}
+          deleting={deleting}
+          onCancel={() => setShowDeleteModal(false)}
+          onConfirm={deleteVehicle}
         />
       )}
 
@@ -1084,6 +1175,7 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
   const [form, setForm] = useState({
     vin: '',
     unit_number: '',
+    plate: '',
     year: '',
     make: '',
     model: '',
@@ -1109,6 +1201,7 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
     const requiredFields = [
       ['vin', 'VIN'],
       ['unit_number', 'unit number'],
+      ['plate', 'license plate'],
       ['year', 'year'],
       ['make', 'make'],
       ['model', 'model'],
@@ -1145,6 +1238,7 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
         ...form,
         vin: form.vin.trim().toUpperCase(),
         unit_number: form.unit_number.trim().toUpperCase(),
+        plate: form.plate.trim().toUpperCase(),
         year,
         odometer,
         car_class: form.car_class.trim().toUpperCase(),
@@ -1184,9 +1278,15 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
           </div>
           <div className="form-row">
             <div className="form-group">
+              <label>License Plate *</label>
+              <input value={form.plate} onChange={(e) => handleChange('plate', e.target.value.toUpperCase())} />
+            </div>
+            <div className="form-group">
               <label>Year *</label>
               <input type="number" value={form.year} onChange={(e) => handleChange('year', e.target.value)} />
             </div>
+          </div>
+          <div className="form-row">
             <div className="form-group">
               <label>Status</label>
               <select value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
@@ -1195,6 +1295,10 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
                 <option value="On Hold">On Hold</option>
                 <option value="In Maintenance">In Maintenance</option>
               </select>
+            </div>
+            <div className="form-group">
+              <label>Trim</label>
+              <input value={form.trim} onChange={(e) => handleChange('trim', e.target.value)} />
             </div>
           </div>
           <div className="form-row">
@@ -1208,10 +1312,6 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
             </div>
           </div>
           <div className="form-row">
-            <div className="form-group">
-              <label>Trim</label>
-              <input value={form.trim} onChange={(e) => handleChange('trim', e.target.value)} />
-            </div>
             <div className="form-group">
               <label>Color</label>
               <input value={form.color} onChange={(e) => handleChange('color', e.target.value)} />
@@ -1269,6 +1369,44 @@ function AddVehicleModal({ locations, onClose, onSaved }) {
           <button className="btn btn--secondary" onClick={onClose}>Cancel</button>
           <button className="btn btn--primary" onClick={handleSubmit} disabled={saving}>
             {saving ? 'Saving...' : 'Create Vehicle'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteVehicleModal({ vehicle, deleting, onCancel, onConfirm }) {
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal__header">
+          <span>Delete Vehicle</span>
+          <button onClick={onCancel} style={{ fontSize: '1.2rem', color: 'var(--on-surface-variant)' }}>&times;</button>
+        </div>
+        <div className="modal__body">
+          <div style={{
+            padding: 16,
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--error-container)',
+            color: 'var(--error)',
+            marginBottom: 16,
+          }}>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>
+              {vehicle.year} {vehicle.make} {vehicle.model}
+            </div>
+            <div style={{ fontSize: '0.82rem' }}>
+              Unit #{vehicle.unit_number} | VIN: {vehicle.vin} | Plate: {vehicle.plate || 'N/A'}
+            </div>
+          </div>
+          <p style={{ fontSize: '0.82rem', color: 'var(--on-surface-variant)' }}>
+            This will permanently remove the vehicle and its related history from the database. This action cannot be undone.
+          </p>
+        </div>
+        <div className="modal__footer">
+          <button className="btn btn--secondary" onClick={onCancel} disabled={deleting}>Cancel</button>
+          <button className="btn btn--danger" onClick={onConfirm} disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       </div>

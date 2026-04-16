@@ -55,6 +55,9 @@ const VEHICLE_SELECT_SQL = `
            WHEN v.status = 'On Hold' AND latest_hold.reason IS NOT NULL THEN 1
            ELSE 0
          END::int AS active_hold_count,
+         COALESCE(maintenance.active_maintenance_count, 0)::int AS active_maintenance_count,
+         COALESCE(active_rentals.active_rental_count, 0)::int AS active_rental_count,
+         COALESCE(damages.damage_count, 0)::int AS damage_count,
          latest_hold.reason AS latest_hold_reason,
          CASE
            WHEN COALESCE(holds.active_hold_count, 0) > 0 OR v.status = 'On Hold'
@@ -93,6 +96,32 @@ const VEHICLE_SELECT_SQL = `
     WHERE a.add_rank > COALESCE(r.remove_count, 0)
     GROUP BY a.vin
   ) holds ON holds.vin = v.vin
+  LEFT JOIN (
+    SELECT e.vin,
+           GREATEST(
+             COUNT(*) FILTER (WHERE m.action = 'Add') -
+             COUNT(*) FILTER (WHERE m.action = 'Remove'),
+             0
+           )::int AS active_maintenance_count
+    FROM event e
+    JOIN maintenance m ON e.event_id = m.event_id
+    GROUP BY e.vin
+  ) maintenance ON maintenance.vin = v.vin
+  LEFT JOIN (
+    SELECT e.vin, COUNT(*)::int AS active_rental_count
+    FROM event e
+    JOIN rental r ON e.event_id = r.event_id
+    WHERE r.start_time <= NOW()
+      AND (r.end_time IS NULL OR r.end_time >= NOW())
+    GROUP BY e.vin
+  ) active_rentals ON active_rentals.vin = v.vin
+  LEFT JOIN (
+    SELECT e.vin, COUNT(*)::int AS damage_count
+    FROM event e
+    JOIN damage_report dr ON e.event_id = dr.event_id
+    WHERE dr.damage_type = 'Damage'
+    GROUP BY e.vin
+  ) damages ON damages.vin = v.vin
   LEFT JOIN LATERAL (
     SELECT h.reason
     FROM event e
@@ -457,6 +486,7 @@ app.post('/api/vehicles', async (req, res) => {
       status,
       location_code,
       in_service_date,
+      plate,
       new_or_used,
       next_pm,
       handicap_equipped,
@@ -464,14 +494,17 @@ app.post('/api/vehicles', async (req, res) => {
       package: vehiclePackage,
     } = req.body;
 
-    if (!vin || !unit_number || !year || !make || !model || !car_class || odometer === undefined || odometer === null || odometer === '' || !location_code || !in_service_date) {
+    if (!vin || !unit_number || !year || !make || !model || !car_class || odometer === undefined || odometer === null || odometer === '' || !location_code || !in_service_date || !plate) {
       return res.status(400).json({
-        error: 'Missing required fields: vin, unit_number, year, make, model, car_class, odometer, location_code, in_service_date',
+        error: 'Missing required fields: vin, unit_number, year, make, model, car_class, odometer, location_code, in_service_date, plate',
       });
     }
 
     const parsedYear = toNullableInt(year);
     const parsedOdometer = toNullableInt(odometer);
+    const normalizedVin = String(vin).trim().toUpperCase();
+    const normalizedUnitNumber = String(unit_number).trim().toUpperCase();
+    const normalizedPlate = String(plate).trim().toUpperCase();
 
     if (!parsedYear || parsedYear < 1900) {
       return res.status(400).json({ error: 'Year must be a valid number.' });
@@ -481,60 +514,79 @@ app.post('/api/vehicles', async (req, res) => {
       return res.status(400).json({ error: 'Mileage/odometer must be a valid non-negative number.' });
     }
 
-    const result = await pool.query(
-      `INSERT INTO vehicle (
-        vin, unit_number, year, make, model, trim, color, car_class, body_style,
-        fuel_type, fuel_capacity, engine_size, horsepower, tire_type, num_wheels,
-        weight, seat_count, msrp, odometer, status, location_code, in_service_date,
-        new_or_used, next_pm, handicap_equipped, dealer, package
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-        $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27
-      )
-      RETURNING *`,
-      [
-        vin,
-        unit_number,
-        parsedYear,
-        make,
-        model,
-        trim || null,
-        color || null,
-        car_class,
-        body_style || null,
-        fuel_type || null,
-        toNullableNumber(fuel_capacity),
-        toNullableNumber(engine_size),
-        toNullableNumber(horsepower),
-        tire_type || null,
-        toNullableInt(num_wheels) || 4,
-        toNullableInt(weight),
-        toNullableInt(seat_count),
-        toNullableNumber(msrp),
-        parsedOdometer,
-        status || 'Available',
-        location_code,
-        in_service_date || null,
-        new_or_used || 'New',
-        toNullableInt(next_pm),
-        Boolean(handicap_equipped),
-        dealer || null,
-        vehiclePackage || null,
-      ]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO vehicle (
+          vin, unit_number, year, make, model, trim, color, car_class, body_style,
+          fuel_type, fuel_capacity, engine_size, horsepower, tire_type, num_wheels,
+          weight, seat_count, msrp, odometer, status, location_code, in_service_date,
+          new_or_used, next_pm, handicap_equipped, dealer, package
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+          $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27
+        )
+        RETURNING *`,
+        [
+          normalizedVin,
+          normalizedUnitNumber,
+          parsedYear,
+          make,
+          model,
+          trim || null,
+          color || null,
+          car_class,
+          body_style || null,
+          fuel_type || null,
+          toNullableNumber(fuel_capacity),
+          toNullableNumber(engine_size),
+          toNullableNumber(horsepower),
+          tire_type || null,
+          toNullableInt(num_wheels) || 4,
+          toNullableInt(weight),
+          toNullableInt(seat_count),
+          toNullableNumber(msrp),
+          parsedOdometer,
+          status || 'Available',
+          location_code,
+          in_service_date || null,
+          new_or_used || 'New',
+          toNullableInt(next_pm),
+          Boolean(handicap_equipped),
+          dealer || null,
+          vehiclePackage || null,
+        ]
+      );
 
-    const synced = await pool.query(
-      `${VEHICLE_SELECT_SQL}
-       WHERE v.vin = $1
-       LIMIT 1`,
-      [result.rows[0].vin]
-    );
+      await client.query(
+        `INSERT INTO registration (
+          vin, plate, plate_type, effective_date, expiration_date, location_code, country
+        ) VALUES (
+          $1, $2, 'Non-Commercial', CURRENT_DATE, CURRENT_DATE + INTERVAL '1 year', $3, 'CAN'
+        )`,
+        [normalizedVin, normalizedPlate, location_code]
+      );
 
-    res.status(201).json(synced.rows[0] || result.rows[0]);
+      const synced = await client.query(
+        `${VEHICLE_SELECT_SQL}
+         WHERE v.vin = $1
+         LIMIT 1`,
+        [result.rows[0].vin]
+      );
+
+      await client.query('COMMIT');
+      res.status(201).json(synced.rows[0] || result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Error creating vehicle:', error.message);
     if (error.code === '23505') {
-      return res.status(409).json({ error: 'A vehicle with this VIN or unit number already exists.' });
+      return res.status(409).json({ error: 'A vehicle with this VIN, unit number, or license plate already exists.' });
     }
     if (error.code === '23503') {
       return res.status(400).json({ error: 'The selected location does not exist in the database.' });
@@ -544,54 +596,167 @@ app.post('/api/vehicles', async (req, res) => {
 });
 
 app.put('/api/vehicles/:vin', async (req, res) => {
+  const client = await pool.connect();
   try {
-    const fields = pickAllowedFields(req.body, VEHICLE_EDITABLE_FIELDS);
+    const { plate, ...vehiclePayload } = req.body;
+    const fields = pickAllowedFields(vehiclePayload, VEHICLE_EDITABLE_FIELDS);
     const keys = Object.keys(fields);
+    const normalizedPlate = plate === undefined || plate === null ? null : String(plate).trim().toUpperCase();
 
-    if (keys.length === 0) {
+    if (keys.length === 0 && !normalizedPlate) {
       return res.status(400).json({ error: 'No editable fields to update' });
     }
 
-    const values = keys.map((key) => fields[key]);
-    const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
-    values.push(req.params.vin);
+    await client.query('BEGIN');
+    let result;
+    if (keys.length > 0) {
+      const values = keys.map((key) => fields[key]);
+      const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
+      values.push(req.params.vin);
 
-    const result = await pool.query(
-      `UPDATE vehicle
-       SET ${setClause}
-       WHERE vin = $${values.length}
-       RETURNING *`,
-      values
-    );
+      result = await client.query(
+        `UPDATE vehicle
+         SET ${setClause}
+         WHERE vin = $${values.length}
+         RETURNING *`,
+        values
+      );
+    } else {
+      result = await client.query('SELECT * FROM vehicle WHERE vin = $1', [req.params.vin]);
+    }
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Vehicle not found' });
     }
 
-    const synced = await pool.query(
+    if (normalizedPlate) {
+      const latestRegistration = await client.query(
+        `SELECT plate
+         FROM registration
+         WHERE vin = $1
+         ORDER BY expiration_date DESC NULLS LAST, effective_date DESC NULLS LAST, plate
+         LIMIT 1`,
+        [req.params.vin]
+      );
+
+      if (latestRegistration.rows.length > 0) {
+        await client.query(
+          `UPDATE registration
+           SET plate = $1,
+               location_code = COALESCE($2, location_code)
+           WHERE vin = $3 AND plate = $4`,
+          [normalizedPlate, fields.location_code || null, req.params.vin, latestRegistration.rows[0].plate]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO registration (
+            vin, plate, plate_type, effective_date, expiration_date, location_code, country
+          ) VALUES (
+            $1, $2, 'Non-Commercial', CURRENT_DATE, CURRENT_DATE + INTERVAL '1 year', $3, 'CAN'
+          )`,
+          [req.params.vin, normalizedPlate, fields.location_code || result.rows[0].location_code]
+        );
+      }
+    }
+
+    const synced = await client.query(
       `${VEHICLE_SELECT_SQL}
        WHERE v.vin = $1
        LIMIT 1`,
       [result.rows[0].vin]
     );
 
+    await client.query('COMMIT');
     res.json(synced.rows[0] || result.rows[0]);
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error updating vehicle:', error.message);
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'That license plate is already assigned to this vehicle.' });
+    }
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
   }
 });
 
 app.delete('/api/vehicles/:vin', async (req, res) => {
+  const client = await pool.connect();
   try {
-    const result = await pool.query('DELETE FROM vehicle WHERE vin = $1 RETURNING *', [req.params.vin]);
-    if (result.rows.length === 0) {
+    await client.query('BEGIN');
+
+    const existing = await client.query('SELECT * FROM vehicle WHERE vin = $1 LIMIT 1', [req.params.vin]);
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Vehicle not found' });
     }
+
+    // Delete event subtype rows explicitly so this works even if a local DB
+    // was created before all cascade rules were finalized.
+    await client.query(
+      `DELETE FROM equipment
+       WHERE event_id IN (
+         SELECT cc.event_id
+         FROM condition_check cc
+         JOIN event e ON e.event_id = cc.event_id
+         WHERE e.vin = $1
+       )`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM damage_report
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM condition_check
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM rental
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM maintenance
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM hold
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM movement
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query(
+      `DELETE FROM note
+       WHERE event_id IN (SELECT event_id FROM event WHERE vin = $1)`,
+      [req.params.vin]
+    );
+    await client.query('DELETE FROM event WHERE vin = $1', [req.params.vin]);
+    await client.query('DELETE FROM registration WHERE vin = $1', [req.params.vin]);
+
+    const result = await client.query('DELETE FROM vehicle WHERE vin = $1 RETURNING *', [req.params.vin]);
+    await client.query('COMMIT');
     res.json({ message: 'Vehicle deleted', vehicle: result.rows[0] });
   } catch (error) {
-    console.error('Error deleting vehicle:', error.message);
-    res.status(500).json({ error: 'Internal server error' });
+    await client.query('ROLLBACK');
+    console.error('Error deleting vehicle:', error.message, error.detail || '');
+    if (error.code === '23503') {
+      return res.status(409).json({
+        error: 'Vehicle could not be deleted because related database records still reference it.',
+        detail: error.detail,
+      });
+    }
+    res.status(500).json({ error: 'Internal server error', detail: error.message });
+  } finally {
+    client.release();
   }
 });
 
