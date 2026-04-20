@@ -947,6 +947,78 @@ app.get('/api/conditions/:eventId', async (req, res) => {
   }
 });
 
+// mechanic updates a specific damage report with detailed info:
+app.put('/api/conditions/damages/:eventId/:bodyArea', async (req, res) => {
+  try {
+    const { eventId, bodyArea } = req.params;
+    const { damage_type, severity, description, repair_cost, mechanic_notes } = req.body;
+
+    const result = await pool.query(
+      `UPDATE damage_report
+       SET damage_type = COALESCE($1, damage_type),
+           severity = COALESCE($2, severity),
+           description = COALESCE($3, description),
+           repair_cost = $4,
+           mechanic_notes = $5
+       WHERE event_id = $6 AND body_area = $7
+       RETURNING *`,
+      [damage_type, severity, description, repair_cost || null, mechanic_notes || null, eventId, bodyArea]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Damage report not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating damage report:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// mechanic adds a new damage report to an existing condition check
+app.post('/api/conditions/damages', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { vin, employee_id, location_code, odometer, body_area, damage_type, severity, description, repair_cost, mechanic_notes } = req.body;
+
+    if (!vin || !body_area || !damage_type) {
+      return res.status(400).json({ error: 'vin, body_area, and damage_type are required' });
+    }
+
+    // creating a condition check event to attach the damage report to:
+    const eventResult = await client.query(
+      `INSERT INTO event (event_type, vin, employee_id, timestamp, location_code, odometer)
+       VALUES ('condition_check', $1, $2, NOW(), $3, $4)
+       RETURNING event_id`,
+      [vin, employee_id || null, location_code || null, odometer || null]
+    );
+    const eventId = eventResult.rows[0].event_id;
+
+    await client.query(
+      'INSERT INTO condition_check (event_id, fuel_level, notes) VALUES ($1, $2, $3)',
+      [eventId, null, 'Mechanic inspection']
+    );
+
+    await client.query(
+      `INSERT INTO damage_report (event_id, body_area, damage_type, severity, description, repair_cost, mechanic_notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [eventId, body_area, damage_type, severity || null, description || null, repair_cost || null, mechanic_notes || null]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ event_id: eventId, body_area, damage_type });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error creating damage report:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+
 app.get('/api/conditions/damages/:vin', async (req, res) => {
   try {
     const result = await pool.query(

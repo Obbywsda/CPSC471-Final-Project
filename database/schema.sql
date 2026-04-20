@@ -201,8 +201,13 @@ CREATE TABLE damage_report (
     body_area   VARCHAR(50) NOT NULL,
     damage_type VARCHAR(30) NOT NULL CHECK (damage_type IN ('Damage', 'Wear and Tear')),
     severity    VARCHAR(20),
+    -- description TEXT,
+    -- PRIMARY KEY (event_id, body_area)
     description TEXT,
+    repair_cost DECIMAL(10,2),
+    mechanic_notes TEXT,
     PRIMARY KEY (event_id, body_area)
+
 );
 
 -- ============================================================
