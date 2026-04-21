@@ -54,7 +54,7 @@ export default function TopBar({ title, badge }) {
   return (
     <header className="topbar">
       <div className="topbar__left">
-        <span className="topbar__title">{title || 'Concourse Fleet'}</span>
+        <span className="topbar__title">{title || 'Vehicle Event Manager'}</span>
         {badge && <span className="topbar__badge">{badge}</span>}
       </div>
 

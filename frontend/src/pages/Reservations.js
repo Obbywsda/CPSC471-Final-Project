@@ -282,7 +282,7 @@ function MechanicReservations() {
   });
 
   return (
-    <Layout title="Digital Concourse Fleet">
+    <Layout title="Vehicle Event Manager">
       <div className="page-header">
         <div className="page-header__row">
           <div>

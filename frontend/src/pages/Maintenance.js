@@ -286,7 +286,7 @@ function MechanicMaintenance() {
     loadMechanicQueue();
   }, []);
 
-  if (loading) return <Layout title="Maintenance Terminal" badge="MECH_VIEW"><div className="loading-state">Loading...</div></Layout>;
+  if (loading) return <Layout title="VEM Maintenance" badge="VEM TECH"><div className="loading-state">Loading...</div></Layout>;
 
   const v = selectedVehicle;
   const maintenanceEvents = events.filter(e => ['maintenance', 'condition_check'].includes(e.event_type));
@@ -380,7 +380,7 @@ function MechanicMaintenance() {
   };
 
   return (
-    <Layout title="Maintenance Terminal" badge="MECH_VIEW">
+    <Layout title="VEM Maintenance" badge="VEM TECH">
       {v && (
         <>
           {/* Service Ticket Header */}

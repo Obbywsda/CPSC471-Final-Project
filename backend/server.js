@@ -52,7 +52,6 @@ const VEHICLE_SELECT_SQL = `
          l.name AS location_name,
          CASE
            WHEN COALESCE(holds.active_hold_count, 0) > 0 THEN holds.active_hold_count
-           WHEN v.status = 'On Hold' AND latest_hold.reason IS NOT NULL THEN 1
            ELSE 0
          END::int AS active_hold_count,
          COALESCE(maintenance.active_maintenance_count, 0)::int AS active_maintenance_count,
@@ -60,8 +59,12 @@ const VEHICLE_SELECT_SQL = `
          COALESCE(damages.damage_count, 0)::int AS damage_count,
          latest_hold.reason AS latest_hold_reason,
          CASE
-           WHEN COALESCE(holds.active_hold_count, 0) > 0 OR v.status = 'On Hold'
+           WHEN COALESCE(holds.active_hold_count, 0) > 0
              THEN 'On Hold'
+           WHEN COALESCE(maintenance.active_maintenance_count, 0) > 0
+             THEN 'In Maintenance'
+           WHEN COALESCE(active_rentals.active_rental_count, 0) > 0
+             THEN 'Rented'
            ELSE v.status
          END AS status
   FROM vehicle_with_age v
@@ -949,11 +952,13 @@ app.get('/api/conditions/:eventId', async (req, res) => {
 
 // mechanic updates a specific damage report with detailed info:
 app.put('/api/conditions/damages/:eventId/:bodyArea', async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const { eventId, bodyArea } = req.params;
     const { damage_type, severity, description, repair_cost, mechanic_notes } = req.body;
 
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE damage_report
        SET damage_type = COALESCE($1, damage_type),
            severity = COALESCE($2, severity),
@@ -966,13 +971,93 @@ app.put('/api/conditions/damages/:eventId/:bodyArea', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Damage report not found' });
     }
 
+    const eventResult = await client.query('SELECT vin FROM event WHERE event_id = $1', [eventId]);
+    const savedDamage = result.rows[0];
+    if (
+      eventResult.rows[0]?.vin
+      && savedDamage.damage_type === 'Damage'
+      && savedDamage.severity === 'Severe'
+    ) {
+      await client.query('UPDATE vehicle SET status = $1 WHERE vin = $2', ['On Hold', eventResult.rows[0].vin]);
+    }
+
+    await client.query('COMMIT');
     res.json(result.rows[0]);
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error updating damage report:', error.message);
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/conditions/damages/:eventId/:bodyArea', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { eventId, bodyArea } = req.params;
+
+    const existing = await client.query(
+      `SELECT dr.*, e.vin
+       FROM damage_report dr
+       JOIN event e ON dr.event_id = e.event_id
+       WHERE dr.event_id = $1 AND dr.body_area = $2
+       LIMIT 1`,
+      [eventId, bodyArea]
+    );
+
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Damage report not found' });
+    }
+
+    const deletedReport = existing.rows[0];
+    await client.query(
+      'DELETE FROM damage_report WHERE event_id = $1 AND body_area = $2',
+      [eventId, bodyArea]
+    );
+
+    const remainingEventDamages = await client.query(
+      'SELECT COUNT(*)::int AS count FROM damage_report WHERE event_id = $1',
+      [eventId]
+    );
+
+    if (Number(remainingEventDamages.rows[0]?.count || 0) === 0) {
+      await client.query('DELETE FROM condition_check WHERE event_id = $1', [eventId]);
+      await client.query('DELETE FROM event WHERE event_id = $1', [eventId]);
+    }
+
+    if (deletedReport.damage_type === 'Damage' && deletedReport.severity === 'Severe') {
+      const remainingSevere = await client.query(
+        `SELECT COUNT(*)::int AS count
+         FROM damage_report dr
+         JOIN event e ON dr.event_id = e.event_id
+         WHERE e.vin = $1
+           AND dr.damage_type = 'Damage'
+           AND dr.severity = 'Severe'`,
+        [deletedReport.vin]
+      );
+
+      if (Number(remainingSevere.rows[0]?.count || 0) > 0) {
+        await client.query('UPDATE vehicle SET status = $1 WHERE vin = $2', ['On Hold', deletedReport.vin]);
+      } else {
+        await syncVehicleOperationalStatus(client, deletedReport.vin, 'Available');
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Damage report deleted', damage: deletedReport });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting damage report:', error.message);
+    res.status(500).json({ error: 'Internal server error', detail: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -984,6 +1069,7 @@ app.post('/api/conditions/damages', async (req, res) => {
     const { vin, employee_id, location_code, odometer, body_area, damage_type, severity, description, repair_cost, mechanic_notes } = req.body;
 
     if (!vin || !body_area || !damage_type) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'vin, body_area, and damage_type are required' });
     }
 
@@ -1006,6 +1092,10 @@ app.post('/api/conditions/damages', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [eventId, body_area, damage_type, severity || null, description || null, repair_cost || null, mechanic_notes || null]
     );
+
+    if (damage_type === 'Damage' && severity === 'Severe') {
+      await client.query('UPDATE vehicle SET status = $1 WHERE vin = $2', ['On Hold', vin]);
+    }
 
     await client.query('COMMIT');
     res.status(201).json({ event_id: eventId, body_area, damage_type });

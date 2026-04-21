@@ -3,8 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import { vehicleApi } from '../api';
 import {
-  BarChart3, TrendingUp, Download, Filter,
-  Car, Wrench, DollarSign, Calendar,
+  TrendingUp, Download, Filter,
+  Car, Wrench,
 } from 'lucide-react';
 
 export default function Reports() {
@@ -22,12 +22,12 @@ export default function Reports() {
   const onHold = vehicles.filter(v => v.status === 'On Hold').length;
 
   return (
-    <Layout title={isMechanic ? 'Fleet Reports' : 'Concourse Reports'} badge={isMechanic ? 'MECH_VIEW' : undefined}>
+    <Layout title="Dashboard" badge={isMechanic ? 'VEM TECH' : undefined}>
       <div className="page-header">
         <div className="page-header__row">
           <div>
-            <div className="page-header__breadcrumb">Analytics</div>
-            <h1 className="page-header__title">Fleet Reports</h1>
+            <div className="page-header__breadcrumb">VEM Fleet Summary</div>
+            <h1 className="page-header__title">Dashboard</h1>
             <p className="page-header__subtitle">Overview of fleet performance, utilization, and maintenance metrics</p>
           </div>
           <div className="page-header__actions">

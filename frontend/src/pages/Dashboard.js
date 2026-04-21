@@ -47,7 +47,7 @@ function ManagerDashboard({ canEdit }) {
     } catch {}
   };
 
-  if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading dashboard...</div></Layout>;
+  if (loading) return <Layout title="Vehicle Event Manager"><div className="loading-state">Loading dashboard...</div></Layout>;
 
   const v = selectedVehicle;
   const totalFleet = vehicles.length;
@@ -67,7 +67,7 @@ function ManagerDashboard({ canEdit }) {
   const statusLabel = v?.status === 'Available' ? 'ACTIVE' : (v?.status || 'UNKNOWN').toUpperCase();
 
   return (
-    <Layout title="Concourse Fleet">
+    <Layout title="Vehicle Event Manager">
       {v && (
         <>
           {/* Vehicle Header */}
@@ -287,14 +287,14 @@ function MechanicDashboard() {
     })();
   }, []);
 
-  if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading dashboard...</div></Layout>;
+  if (loading) return <Layout title="Vehicle Event Manager"><div className="loading-state">Loading dashboard...</div></Layout>;
 
   const v = selectedVehicle;
   const healthScore = v ? Math.min(100, Math.max(50, 100 - Math.floor((v.odometer || 0) / 1000))) : 82;
   const needsService = v && (v.status === 'In Maintenance' || v.status === 'On Hold');
 
   return (
-    <Layout title="Concourse Fleet" badge="MECH_VIEW">
+    <Layout title="Vehicle Event Manager" badge="VEM TECH">
       {v && (
         <>
           {/* Vehicle Header */}
@@ -332,45 +332,23 @@ function MechanicDashboard() {
             </div>
           </div>
 
-          {/* Condition Map + Fluid Levels */}
-          <div className="grid-8-4" style={{ marginBottom: 28 }}>
-            <div className="card">
-              <div className="card__header">
-                <span className="card__header-title">Technical Condition Map</span>
-                <div className="tabs-bar">
-                  <button className="tabs-bar__tab tabs-bar__tab--active">TOP VIEW</button>
-                  <button className="tabs-bar__tab">CHASSIS</button>
-                </div>
-              </div>
-              <div className="card__body">
-                <div className="condition-map">
-                  <div className="condition-map__placeholder">Vehicle condition diagram</div>
-                  <div className="condition-dot condition-dot--inspection" style={{ top: '45%', left: '48%' }} />
-                  <div className="condition-dot condition-dot--damage" style={{ bottom: '20%', left: '35%' }} />
-                  <div className="condition-dot condition-dot--damage" style={{ bottom: '20%', right: '30%' }} />
-                </div>
-              </div>
+          {/* Fluid Levels */}
+          <div className="card" style={{ marginBottom: 28 }}>
+            <div className="card__header">
+              <span className="card__header-title">Fluid Levels & Criticals</span>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div className="card">
-                <div className="card__header">
-                  <span className="card__header-title">Fluid Levels & Criticals</span>
+            <div className="card__body">
+              <FluidRow name="Engine Oil Viscosity" value={30} status="LOW" />
+              <FluidRow name="Brake Fluid" value={88} status="NORMAL" />
+              <FluidRow name="Coolant Level" value={92} status="NORMAL" />
+              <div className="grid-2" style={{ marginTop: 16 }}>
+                <div style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', marginBottom: 4 }}>ELECTRICAL</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>14.2V Stable</div>
                 </div>
-                <div className="card__body">
-                  <FluidRow name="Engine Oil Viscosity" value={30} status="LOW" />
-                  <FluidRow name="Brake Fluid" value={88} status="NORMAL" />
-                  <FluidRow name="Coolant Level" value={92} status="NORMAL" />
-                  <div className="grid-2" style={{ marginTop: 16 }}>
-                    <div style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 14, textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', marginBottom: 4 }}>ELECTRICAL</div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>14.2V Stable</div>
-                    </div>
-                    <div style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 14, textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', marginBottom: 4 }}>TIRE WEAR</div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>4.5mm Avg</div>
-                    </div>
-                  </div>
+                <div style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', marginBottom: 4 }}>TIRE WEAR</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>4.5mm Avg</div>
                 </div>
               </div>
             </div>

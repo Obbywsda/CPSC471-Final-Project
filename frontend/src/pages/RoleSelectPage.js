@@ -39,9 +39,9 @@ export default function RoleSelectPage() {
         <div className="role-select__logo">
           <Car size={32} />
         </div>
-        <h1 className="role-select__title">Concourse Fleet</h1>
+        <h1 className="role-select__title">Vehicle Event Manager</h1>
         <p className="role-select__subtitle">
-          Enterprise Fleet Management Terminal. Select your access level to continue.
+          VEM fleet tracking terminal. Select your access level to continue.
         </p>
         <div className="role-select__cards">
           {ROLES.map(({ id, title, desc, icon: Icon }) => (

@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import { vehicleApi, eventApi, locationApi, conditionApi } from '../api';
 import { formatDate, formatDateTime, formatNumber, getEventLabel, getVehicleStatusClass } from '../utils/formatters';
 import {
-  Download, Save, ChevronRight, Camera, MapPin,
+  Save, ChevronRight, Camera, MapPin,
   AlertTriangle, Eye, Plus, Filter, Search, Trash2, Edit3, PlusCircle
 } from 'lucide-react';
 
@@ -17,6 +17,32 @@ export default function FleetInventory() {
     return isMechanic ? <MechanicVehicleDetail vin={vin} /> : <ManagerVehicleDetail vin={vin} canEdit={canEdit} />;
   }
   return <FleetList canEdit={canEdit} isMechanic={isMechanic} />;
+}
+
+const BODY_AREA_OPTIONS = [
+  'Front Bumper',
+  'Rear Bumper',
+  'Hood',
+  'Roof',
+  'Trunk',
+  'Driver Side Door',
+  'Passenger Side Door',
+  'Driver Side Rear',
+  'Passenger Side Rear',
+  'Driver Side Mirror',
+  'Passenger Side Mirror',
+  'Windshield',
+  'Rear Window',
+  'Left Fender',
+  'Right Fender',
+  'Undercarriage',
+];
+
+function getDisplayVehicleStatus(vehicle) {
+  if (Number(vehicle?.active_hold_count || 0) > 0) return 'On Hold';
+  if (Number(vehicle?.active_maintenance_count || 0) > 0) return 'In Maintenance';
+  if (Number(vehicle?.active_rental_count || 0) > 0) return 'Rented';
+  return vehicle?.status || 'Available';
 }
 
 /* ============================================= */
@@ -64,14 +90,14 @@ function FleetList({ canEdit, isMechanic }) {
     return () => clearTimeout(timeout);
   }, [loadFleet, searchQuery]);
 
-  if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading fleet...</div></Layout>;
+  if (loading) return <Layout title="Vehicle Event Manager"><div className="loading-state">Loading fleet...</div></Layout>;
 
   return (
-    <Layout title="Concourse Fleet" badge={isMechanic ? 'MECH_VIEW' : undefined}>
+    <Layout title="Vehicle Event Manager" badge={isMechanic ? 'VEM TECH' : undefined}>
       <div className="page-header">
         <div className="page-header__row">
           <div>
-            <div className="page-header__breadcrumb">Fleet Management</div>
+            <div className="page-header__breadcrumb">VEM Fleet Management</div>
             <h1 className="page-header__title">Fleet Inventory</h1>
             <p className="page-header__subtitle">Manage and view all fleet vehicles</p>
           </div>
@@ -118,21 +144,24 @@ function FleetList({ canEdit, isMechanic }) {
               </tr>
             </thead>
             <tbody>
-              {vehicles.map((v) => (
-                <tr key={v.vin} style={{ cursor: 'pointer' }} onClick={() => navigate(`/fleet/${v.vin}`)}>
-                  <td style={{ fontWeight: 700 }}>{v.unit_number}</td>
-                  <td>{v.year} {v.make} {v.model}</td>
-                  <td>{v.plate || 'N/A'}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>{v.vin.substring(0, 10)}...</td>
-                  <td>
-                    <span className={`badge ${getVehicleStatusClass(v.status)}`}>{v.status}</span>
-                  </td>
-                  <td>{v.location_name ? `${v.location_name} (${v.location_code})` : v.location_code}</td>
-                  <td>{formatNumber(v.odometer)}</td>
-                  <td>{formatNumber(v.next_pm)}</td>
-                  <td><button className="btn btn--ghost"><Eye size={16} /></button></td>
-                </tr>
-              ))}
+              {vehicles.map((v) => {
+                const displayStatus = getDisplayVehicleStatus(v);
+                return (
+                  <tr key={v.vin} style={{ cursor: 'pointer' }} onClick={() => navigate(`/fleet/${v.vin}`)}>
+                    <td style={{ fontWeight: 700 }}>{v.unit_number}</td>
+                    <td>{v.year} {v.make} {v.model}</td>
+                    <td>{v.plate || 'N/A'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>{v.vin.substring(0, 10)}...</td>
+                    <td>
+                      <span className={`badge ${getVehicleStatusClass(displayStatus)}`}>{displayStatus}</span>
+                    </td>
+                    <td>{v.location_name ? `${v.location_name} (${v.location_code})` : v.location_code}</td>
+                    <td>{formatNumber(v.odometer)}</td>
+                    <td>{formatNumber(v.next_pm)}</td>
+                    <td><button className="btn btn--ghost"><Eye size={16} /></button></td>
+                  </tr>
+                );
+              })}
               {!vehicles.length && (
                 <tr>
                   <td colSpan="9">
@@ -286,13 +315,14 @@ function ManagerVehicleDetail({ vin, canEdit }) {
     }
   };
 
-  if (loading) return <Layout title="Concourse Fleet"><div className="loading-state">Loading vehicle...</div></Layout>;
-  if (!vehicle) return <Layout title="Concourse Fleet"><div className="loading-state">Vehicle not found</div></Layout>;
+  if (loading) return <Layout title="Vehicle Event Manager"><div className="loading-state">Loading vehicle...</div></Layout>;
+  if (!vehicle) return <Layout title="Vehicle Event Manager"><div className="loading-state">Vehicle not found</div></Layout>;
 
   const v = vehicle;
   const latestEvent = events[0];
   const registrationExpiry = registration?.expiration_date || v.registration_expiration_date;
   const activeHoldCount = activeHolds.length;
+  const displayStatus = getDisplayVehicleStatus({ ...v, active_hold_count: activeHoldCount });
   const isHoldActive = (event) => {
     if (event.hold_action === 'Remove') return false;
     const eventReason = event.reason || event.hold_reason || '';
@@ -315,12 +345,12 @@ function ManagerVehicleDetail({ vin, canEdit }) {
   };
 
   return (
-    <Layout title="Concourse Fleet">
+    <Layout title="Vehicle Event Manager">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-            <span className={`badge ${getVehicleStatusClass(v.status)}`}>{v.status}</span>
+            <span className={`badge ${getVehicleStatusClass(displayStatus)}`}>{displayStatus}</span>
             <span style={{ fontSize: '0.82rem', color: 'var(--on-surface-variant)' }}>ID: {v.unit_number}</span>
             {activeHoldCount > 0 && <span className="badge badge--hold">{activeHoldCount} HOLD{activeHoldCount === 1 ? '' : 'S'}</span>}
           </div>
@@ -328,9 +358,6 @@ function ManagerVehicleDetail({ vin, canEdit }) {
           <p className="vehicle-header__subtitle">{v.trim} &bull; {v.body_style} &bull; {v.fuel_type}</p>
         </div>
         <div className="page-header__actions">
-          <button className="btn btn--secondary" onClick={() => navigate('/fleet')}>
-            <Download size={16} /> Export Log
-          </button>
           {canEdit && (
             <button className="btn btn--secondary" onClick={() => setShowHoldModal(true)} disabled={saving}>
               Add Hold
@@ -495,7 +522,7 @@ function ManagerVehicleDetail({ vin, canEdit }) {
           </div>
 
           {/* Pending Alert */}
-          {v.status !== 'Available' && (
+          {displayStatus !== 'Available' && (
             <div style={{
               background: 'var(--warning-container)', borderRadius: 'var(--radius-lg)',
               padding: 20, display: 'flex', gap: 12, alignItems: 'flex-start',
@@ -530,7 +557,7 @@ function ManagerVehicleDetail({ vin, canEdit }) {
             || (
               canEdit
               && selectedHold.hold_action !== 'Remove'
-              && v.status === 'On Hold'
+              && displayStatus === 'On Hold'
               && activeHoldCount > 0
             )
           }
@@ -630,16 +657,15 @@ function MechanicVehicleDetail({ vin }) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  if (loading) return <Layout title="Concourse Fleet" badge="MECH_VIEW"><div className="loading-state">Loading...</div></Layout>;
-  if (!vehicle) return <Layout title="Concourse Fleet" badge="MECH_VIEW"><div className="loading-state">Vehicle not found</div></Layout>;
+  if (loading) return <Layout title="Vehicle Event Manager" badge="VEM TECH"><div className="loading-state">Loading...</div></Layout>;
+  if (!vehicle) return <Layout title="Vehicle Event Manager" badge="VEM TECH"><div className="loading-state">Vehicle not found</div></Layout>;
 
   const v = vehicle;
-  const needsService = v.status === 'In Maintenance' || v.status === 'On Hold';
+  const activeHoldCount = activeHolds.length;
+  const displayStatus = getDisplayVehicleStatus({ ...v, active_hold_count: activeHoldCount });
+  const needsService = displayStatus === 'In Maintenance' || displayStatus === 'On Hold';
   const fuelPct = v.fuel_capacity ? Math.min(100, Math.round((v.fuel_capacity * 0.65))) : 65;
   const oilPct = v.next_pm && v.odometer ? Math.max(5, Math.round(((v.next_pm - v.odometer) / v.next_pm) * 100)) : 15;
-  const latestConditionCheck = events.find((event) => event.event_type === 'condition_check');
-  const latestDamage = damages[0];
-  const activeHoldCount = activeHolds.length;
 
   const addMaintenanceHold = async (reason) => {
     setSaving(true);
@@ -759,8 +785,25 @@ function MechanicVehicleDetail({ vin }) {
     }
   };
 
+  const handleDeleteDamage = async (dmg) => {
+    const confirmed = window.confirm(`Delete the damage report for ${dmg.body_area}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setSaving(true);
+    try {
+      await conditionApi.deleteDamage(dmg.event_id, dmg.body_area);
+      setShowDamageModal(false);
+      setEditingDamage(null);
+      await loadData();
+    } catch (error) {
+      alert(`Error deleting damage report: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <Layout title="Concourse Fleet" badge="MECH_VIEW">
+    <Layout title="Vehicle Event Manager" badge="VEM TECH">
       {/* Breadcrumb + Header */}
       <div style={{ fontSize: '0.78rem', color: 'var(--on-surface-variant)', marginBottom: 8 }}>
         <span style={{ cursor: 'pointer' }} onClick={() => navigate('/fleet')}>Fleet Inventory</span>
@@ -778,7 +821,6 @@ function MechanicVehicleDetail({ vin }) {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {needsService && <span className="badge badge--service-required">SERVICE REQUIRED</span>}
-          <button className="btn btn--secondary"><Download size={16} /> Export Full Tech Log</button>
           <button className="btn btn--secondary" onClick={() => setShowHoldModal(true)} disabled={saving}>
             Add Maintenance Hold
           </button>
@@ -850,34 +892,17 @@ function MechanicVehicleDetail({ vin }) {
         </div>
       </div>
 
-      {/* Condition Map + Fluid Levels + Engine Specs */}
+      {/* Damage Reports + Fluid Levels + Engine Specs */}
       <div className="grid-8-4" style={{ marginBottom: 24 }}>
         <div>
           <div className="card" style={{ marginBottom: 24 }}>
             <div className="card__header">
-              <span className="card__header-title">Vehicle Condition Map</span>
-              <div style={{ display: 'flex', gap: 12, fontSize: '0.72rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--error)', display: 'inline-block' }} /> Damage
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block' }} /> Pending Inspection
-                </span>
-              </div>
+              <span className="card__header-title">Damage Reports ({damages.length})</span>
+              <button className="btn btn--secondary" onClick={handleAddDamage} disabled={saving} style={{ fontSize: '0.78rem' }}>
+                <PlusCircle size={14} /> Add Damage Report
+              </button>
             </div>
             <div className="card__body">
-              <div className="condition-map" style={{ height: 300 }}>
-                <div className="condition-map__placeholder">Vehicle condition diagram</div>
-                {latestDamage && <div className="condition-dot condition-dot--damage" style={{ top: '35%', left: '25%' }}>1</div>}
-                {latestConditionCheck && <div className="condition-dot condition-dot--inspection" style={{ bottom: '20%', right: '30%' }}>{damages.length}</div>}
-              </div>
-         <div style={{ marginTop: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Damage Reports ({damages.length})</span>
-                  <button className="btn btn--secondary" onClick={handleAddDamage} disabled={saving} style={{ fontSize: '0.78rem' }}>
-                    <PlusCircle size={14} /> Add Damage Report
-                  </button>
-                </div>
                 {damages.length === 0 ? (
                   <div style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 16, fontSize: '0.82rem', color: 'var(--on-surface-variant)' }}>
                     No damage reports logged for this vehicle.
@@ -917,7 +942,6 @@ function MechanicVehicleDetail({ vin }) {
                     </div>
                   ))
                 )}
-              </div>
             </div>
           </div>
 
@@ -1019,6 +1043,7 @@ function MechanicVehicleDetail({ vin }) {
           damage={editingDamage}
           onClose={() => { setShowDamageModal(false); setEditingDamage(null); }}
           onSave={handleSaveDamage}
+          onDelete={handleDeleteDamage}
           saving={saving}
         />
       )}
@@ -1488,7 +1513,7 @@ function DeleteVehicleModal({ vehicle, deleting, onCancel, onConfirm }) {
   );
 }
 
-function DamageReportModal({ damage, onClose, onSave, saving }) {
+function DamageReportModal({ damage, onClose, onSave, onDelete, saving }) {
   const [formData, setFormData] = useState({
     body_area: damage?.body_area || '',
     damage_type: damage?.damage_type || 'Damage',
@@ -1522,22 +1547,9 @@ function DamageReportModal({ damage, onClose, onSave, saving }) {
             <label>Body Area</label>
             <select value={formData.body_area} onChange={e => handleChange('body_area', e.target.value)} disabled={!!damage}>
               <option value="">Select area...</option>
-              <option value="Front Bumper">Front Bumper</option>
-              <option value="Rear Bumper">Rear Bumper</option>
-              <option value="Hood">Hood</option>
-              <option value="Roof">Roof</option>
-              <option value="Trunk">Trunk</option>
-              <option value="Driver Side Door">Driver Side Door</option>
-              <option value="Passenger Side Door">Passenger Side Door</option>
-              <option value="Driver Side Rear">Driver Side Rear</option>
-              <option value="Passenger Side Rear">Passenger Side Rear</option>
-              <option value="Driver Side Mirror">Driver Side Mirror</option>
-              <option value="Passenger Side Mirror">Passenger Side Mirror</option>
-              <option value="Windshield">Windshield</option>
-              <option value="Rear Window">Rear Window</option>
-              <option value="Left Fender">Left Fender</option>
-              <option value="Right Fender">Right Fender</option>
-              <option value="Undercarriage">Undercarriage</option>
+              {BODY_AREA_OPTIONS.map((area) => (
+                <option key={area} value={area}>{area}</option>
+              ))}
             </select>
           </div>
           <div className="form-row">
@@ -1574,10 +1586,17 @@ function DamageReportModal({ damage, onClose, onSave, saving }) {
           </div>
         </div>
         <div className="modal__footer">
-          <button className="btn btn--secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn--primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Saving...' : (damage ? 'Update Report' : 'Submit Report')}
-          </button>
+          {damage && (
+            <button className="btn btn--danger" onClick={() => onDelete(damage)} disabled={saving}>
+              <Trash2 size={14} /> {saving ? 'Deleting...' : 'Delete'}
+            </button>
+          )}
+          <div style={{ display: 'flex', gap: 12, marginLeft: 'auto' }}>
+            <button className="btn btn--secondary" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="btn btn--primary" onClick={handleSubmit} disabled={saving}>
+              {saving ? 'Saving...' : (damage ? 'Update Report' : 'Submit Report')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

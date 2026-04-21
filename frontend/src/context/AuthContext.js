@@ -6,23 +6,23 @@ const ROLE_CONFIG = {
   manager: {
     label: 'Fleet Manager',
     canEdit: true,
-    sidebarTitle: 'Concourse Elite',
-    sidebarSubtitle: 'FLEET MANAGEMENT',
-    headerPrefix: 'Admin Portal',
+    sidebarTitle: 'VEM',
+    sidebarSubtitle: 'VEM ADMIN',
+    headerPrefix: 'Vehicle Event Manager',
   },
   employee: {
     label: 'Fleet Employee',
     canEdit: false,
-    sidebarTitle: 'Fleet Terminal',
-    sidebarSubtitle: 'OPERATIONAL SUITE',
-    headerPrefix: 'Admin Portal',
+    sidebarTitle: 'VEM',
+    sidebarSubtitle: 'VEM OPS',
+    headerPrefix: 'Vehicle Event Manager',
   },
   mechanic: {
     label: 'Lead Mechanic',
     canEdit: false,
-    sidebarTitle: 'Concourse Elite',
-    sidebarSubtitle: 'FLEET MANAGEMENT',
-    headerPrefix: 'Mech. View',
+    sidebarTitle: 'VEM',
+    sidebarSubtitle: 'VEM TECH',
+    headerPrefix: 'Vehicle Event Manager',
   },
 };
 

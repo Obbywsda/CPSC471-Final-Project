@@ -6,7 +6,6 @@ import {
   Truck,
   Wrench,
   CalendarDays,
-  BarChart3,
   Settings,
   HelpCircle,
   Plus,
@@ -18,12 +17,14 @@ const NAV_ITEMS = [
   { path: '/fleet', label: 'Fleet Inventory', icon: Truck },
   { path: '/maintenance', label: 'Maintenance', icon: Wrench },
   { path: '/reservations', label: 'Reservations', icon: CalendarDays },
-  { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
 
 export default function Sidebar() {
   const { config, isMechanic } = useAuth();
   const location = useLocation();
+  const navItems = isMechanic
+    ? NAV_ITEMS.filter(({ path }) => path !== '/reservations')
+    : NAV_ITEMS;
 
   return (
     <aside className="sidebar">
@@ -32,13 +33,13 @@ export default function Sidebar() {
           <Car size={20} />
         </div>
         <div className="sidebar__brand-text">
-          <h2>{config?.sidebarTitle || 'Concourse Fleet'}</h2>
-          <span>{config?.sidebarSubtitle || 'Enterprise Terminal'}</span>
+          <h2>{config?.sidebarTitle || 'VEM'}</h2>
+          <span>{config?.sidebarSubtitle || 'VEM'}</span>
         </div>
       </div>
 
       <nav className="sidebar__nav">
-        {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
+        {navItems.map(({ path, label, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
