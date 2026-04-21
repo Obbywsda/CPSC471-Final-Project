@@ -25,7 +25,10 @@ export const eventApi = {
 export const conditionApi = {
   getById: (eventId) => api.get(`/conditions/${eventId}`),
   getDamages: (vin) => api.get(`/conditions/damages/${pathPart(vin)}`),
+  updateDamage: (eventId, bodyArea, data) => api.put(`/conditions/damages/${eventId}/${pathPart(bodyArea)}`, data),
+  createDamage: (data) => api.post('/conditions/damages', data),
 };
+
 
 export const maintenanceApi = {
   getTasks: () => api.get('/maintenance/tasks'),

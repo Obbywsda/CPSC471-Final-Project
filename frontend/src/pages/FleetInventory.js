@@ -6,7 +6,7 @@ import { vehicleApi, eventApi, locationApi, conditionApi } from '../api';
 import { formatDate, formatDateTime, formatNumber, getEventLabel, getVehicleStatusClass } from '../utils/formatters';
 import {
   Download, Save, ChevronRight, Camera, MapPin,
-  AlertTriangle, Eye, Plus, Filter, Search, Trash2,
+  AlertTriangle, Eye, Plus, Filter, Search, Trash2, Edit3, PlusCircle
 } from 'lucide-react';
 
 export default function FleetInventory() {
@@ -600,6 +600,8 @@ function MechanicVehicleDetail({ vin }) {
   const [saving, setSaving] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showDamageModal, setShowDamageModal] = useState(false);
+  const [editingDamage, setEditingDamage] = useState(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -723,6 +725,40 @@ function MechanicVehicleDetail({ vin }) {
     }
   };
 
+  const handleEditDamage = (dmg) => {
+    setEditingDamage(dmg);
+    setShowDamageModal(true);
+  };
+
+  const handleAddDamage = () => {
+    setEditingDamage(null);
+    setShowDamageModal(true);
+  };
+
+  const handleSaveDamage = async (formData) => {
+    setSaving(true);
+    try {
+      if (editingDamage) {
+        await conditionApi.updateDamage(editingDamage.event_id, editingDamage.body_area, formData);
+      } else {
+        await conditionApi.createDamage({
+          vin: v.vin,
+          employee_id: user?.id || null,
+          location_code: v.location_code,
+          odometer: v.odometer,
+          ...formData,
+        });
+      }
+      setShowDamageModal(false);
+      setEditingDamage(null);
+      await loadData();
+    } catch (error) {
+      alert(`Error saving damage report: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Layout title="Concourse Fleet" badge="MECH_VIEW">
       {/* Breadcrumb + Header */}
@@ -835,23 +871,52 @@ function MechanicVehicleDetail({ vin }) {
                 {latestDamage && <div className="condition-dot condition-dot--damage" style={{ top: '35%', left: '25%' }}>1</div>}
                 {latestConditionCheck && <div className="condition-dot condition-dot--inspection" style={{ bottom: '20%', right: '30%' }}>{damages.length}</div>}
               </div>
-              <div className="grid-2" style={{ marginTop: 16 }}>
-                <div style={{ background: 'var(--error-container)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--error)' }}>
-                    {latestDamage ? `1 - ${latestDamage.body_area}` : 'No damage reports'}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
-                    {latestDamage ? `${latestDamage.damage_type}${latestDamage.severity ? ` • ${latestDamage.severity}` : ''}` : 'No condition damage records have been logged for this vehicle.'}
-                  </div>
+         <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Damage Reports ({damages.length})</span>
+                  <button className="btn btn--secondary" onClick={handleAddDamage} disabled={saving} style={{ fontSize: '0.78rem' }}>
+                    <PlusCircle size={14} /> Add Damage Report
+                  </button>
                 </div>
-                <div style={{ background: 'var(--primary-container)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--primary)' }}>
-                    {latestConditionCheck ? `${damages.length} issue(s) in latest inspection` : 'Inspection pending'}
+                {damages.length === 0 ? (
+                  <div style={{ background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 16, fontSize: '0.82rem', color: 'var(--on-surface-variant)' }}>
+                    No damage reports logged for this vehicle.
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
-                    {latestConditionCheck?.cc_notes || 'No inspection notes available.'}
-                  </div>
-                </div>
+                ) : (
+                  damages.map((dmg, i) => (
+                    <div key={`${dmg.event_id}-${dmg.body_area}`} style={{
+                      background: 'var(--surface-container-low)', borderRadius: 'var(--radius-md)', padding: 14, marginBottom: 8,
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--error)' }}>
+                          {dmg.body_area}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                          {dmg.damage_type}{dmg.severity ? ` • ${dmg.severity}` : ''}
+                        </div>
+                        {dmg.description && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: 4 }}>
+                            {dmg.description}
+                          </div>
+                        )}
+                        {dmg.repair_cost && (
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: 4 }}>
+                            Est. Repair: ${Number(dmg.repair_cost).toFixed(2)}
+                          </div>
+                        )}
+                        {dmg.mechanic_notes && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', fontStyle: 'italic', marginTop: 4 }}>
+                            Mechanic: {dmg.mechanic_notes}
+                          </div>
+                        )}
+                      </div>
+                      <button className="btn btn--ghost" onClick={() => handleEditDamage(dmg)} disabled={saving} style={{ fontSize: '0.78rem' }}>
+                        <Edit3 size={14} /> Edit
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -949,6 +1014,15 @@ function MechanicVehicleDetail({ vin }) {
           onSubmit={completeMaintenance}
         />
       )}
+    {showDamageModal && (
+        <DamageReportModal
+          damage={editingDamage}
+          onClose={() => { setShowDamageModal(false); setEditingDamage(null); }}
+          onSave={handleSaveDamage}
+          saving={saving}
+        />
+      )}
+
     </Layout>
   );
 }
@@ -1413,3 +1487,100 @@ function DeleteVehicleModal({ vehicle, deleting, onCancel, onConfirm }) {
     </div>
   );
 }
+
+function DamageReportModal({ damage, onClose, onSave, saving }) {
+  const [formData, setFormData] = useState({
+    body_area: damage?.body_area || '',
+    damage_type: damage?.damage_type || 'Damage',
+    severity: damage?.severity || '',
+    description: damage?.description || '',
+    repair_cost: damage?.repair_cost || '',
+    mechanic_notes: damage?.mechanic_notes || '',
+  });
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = () => {
+    if (!formData.body_area || !formData.damage_type) {
+      alert('Body area and damage type are required');
+      return;
+    }
+    onSave(formData);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+        <div className="modal__header">
+          <span>{damage ? 'Edit Damage Report' : 'Add Damage Report'}</span>
+          <button onClick={onClose} style={{ background: 'none', fontSize: '1.2rem' }}>&times;</button>
+        </div>
+        <div className="modal__body">
+          <div className="form-group">
+            <label>Body Area</label>
+            <select value={formData.body_area} onChange={e => handleChange('body_area', e.target.value)} disabled={!!damage}>
+              <option value="">Select area...</option>
+              <option value="Front Bumper">Front Bumper</option>
+              <option value="Rear Bumper">Rear Bumper</option>
+              <option value="Hood">Hood</option>
+              <option value="Roof">Roof</option>
+              <option value="Trunk">Trunk</option>
+              <option value="Driver Side Door">Driver Side Door</option>
+              <option value="Passenger Side Door">Passenger Side Door</option>
+              <option value="Driver Side Rear">Driver Side Rear</option>
+              <option value="Passenger Side Rear">Passenger Side Rear</option>
+              <option value="Driver Side Mirror">Driver Side Mirror</option>
+              <option value="Passenger Side Mirror">Passenger Side Mirror</option>
+              <option value="Windshield">Windshield</option>
+              <option value="Rear Window">Rear Window</option>
+              <option value="Left Fender">Left Fender</option>
+              <option value="Right Fender">Right Fender</option>
+              <option value="Undercarriage">Undercarriage</option>
+            </select>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Damage Type</label>
+              <select value={formData.damage_type} onChange={e => handleChange('damage_type', e.target.value)}>
+                <option value="Damage">Damage</option>
+                <option value="Wear and Tear">Wear and Tear</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Severity</label>
+              <select value={formData.severity} onChange={e => handleChange('severity', e.target.value)}>
+                <option value="">Select...</option>
+                <option value="Minor">Minor</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Severe">Severe</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Description</label>
+            <textarea rows={3} value={formData.description} onChange={e => handleChange('description', e.target.value)} placeholder="Describe the damage in detail..." />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Estimated Repair Cost ($)</label>
+              <input type="number" step="0.01" value={formData.repair_cost} onChange={e => handleChange('repair_cost', e.target.value)} placeholder="0.00" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Mechanic Notes</label>
+            <textarea rows={2} value={formData.mechanic_notes} onChange={e => handleChange('mechanic_notes', e.target.value)} placeholder="Additional notes from inspection..." />
+          </div>
+        </div>
+        <div className="modal__footer">
+          <button className="btn btn--secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn--primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Saving...' : (damage ? 'Update Report' : 'Submit Report')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
