@@ -42,7 +42,7 @@ function AddEventModal({ vehicle, employee, onClose, onSaved }) {
       const payload = {
         event_type: eventType,
         vin: vehicle.vin,
-        employee_id: employee.employee_id,
+        employee_id: employee?.employee_id || employee?.id || null,
         location_code: form.location_code,
         odometer: form.odometer ? parseInt(form.odometer) : null,
       };

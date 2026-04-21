@@ -19,42 +19,88 @@ A centralized, database-driven web application that consolidates vehicle informa
 
 ## Setup Instructions
 
+These steps assume you are running the project on Windows with PowerShell or Command Prompt.
+
 ### Step 1: Install PostgreSQL
 
-1. Download and install PostgreSQL from [https://www.postgresql.org/download/windows/](https://www.postgresql.org/download/windows/)
-2. During installation, set a password for the `postgres` user (remember this)
-3. Keep the default port as `5432`
-4. After installation, make sure the PostgreSQL service is running
+1. Download and install PostgreSQL from [https://www.postgresql.org/download/windows/](https://www.postgresql.org/download/windows/).
+2. During installation, set a password for the `postgres` user and remember it.
+3. Keep the default port as `5432`.
+4. Make sure the PostgreSQL service is running after installation.
 
-### Step 2: Create the Database
+If `psql` is not recognized in Windows Shell, use the full PostgreSQL path instead:
 
-Open a terminal (Command Prompt or PowerShell) and run:
+```powershell
+"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres
+```
 
-```bash
-# Connect to PostgreSQL
+If you installed a different PostgreSQL version, replace `16` with your installed version number. You can also add `C:\Program Files\PostgreSQL\16\bin` to your Windows `Path` environment variable so the shorter `psql` command works everywhere.
+
+### Step 2: Install Project Dependencies
+
+From the project root:
+
+```powershell
+cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1
+
+cd backend
+npm install
+
+cd ..\frontend
+npm install
+```
+
+### Step 3: Create the Database
+
+Open PowerShell or Command Prompt and connect to PostgreSQL:
+
+```powershell
 psql -U postgres
+```
 
-# Inside the psql prompt, create the database:
+If `psql` is not in your `Path`, use:
+
+```powershell
+"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres
+```
+
+Inside the `psql` prompt, create the database:
+
+```sql
 CREATE DATABASE vehicle_event_manager;
-
-# Exit psql
 \q
 ```
 
-### Step 3: Initialize the Schema and Seed Data
+### Step 4: Populate or Reset the Database
 
-```bash
-# From the project root, run the schema file against the new database:
-psql -U postgres -d vehicle_event_manager -f database/schema.sql
+Run the schema file from the project root:
+
+```powershell
+cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1
+psql -U postgres -d vehicle_event_manager -f database\schema.sql
 ```
 
-This creates all 15 tables and populates them with sample data (10 vehicles, 5 employees, 10 locations, 16 events, etc.).
+If `psql` is not in your `Path`, use:
 
-### Step 4: Configure the Backend
-
-Edit `backend/.env` if your PostgreSQL credentials differ from the defaults:
-
+```powershell
+cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1
+"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -d vehicle_event_manager -f database\schema.sql
 ```
+
+This command creates all database tables and inserts the sample rental fleet data. The schema file starts by dropping existing tables, so running it again will reset the database back to the sample data.
+
+### Step 5: Configure the Backend Database Connection
+
+Create a backend environment file from the example:
+
+```powershell
+cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1\backend
+copy .env.example .env
+```
+
+Open `backend\.env` and make sure the values match your PostgreSQL setup:
+
+```env
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_HOST=localhost
@@ -63,47 +109,48 @@ DB_NAME=vehicle_event_manager
 PORT=5000
 ```
 
-### Step 5: Install Dependencies
+If your PostgreSQL password is not `postgres`, change `DB_PASSWORD` to the password you set during installation.
 
-```bash
-# Backend
-cd backend
-npm install
+### Step 6: Run the Backend
 
-# Frontend
-cd ../frontend
-npm install
-```
+Open a terminal for the backend:
 
-### Step 6: Start the Application
-
-Open **two** terminals:
-
-**Terminal 1 — Backend:**
-```bash
-cd backend
+```powershell
+cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1\backend
 npm start
 ```
-Server starts at `http://localhost:5000`
 
-**Terminal 2 — Frontend:**
-```bash
-cd frontend
+The backend API should start on `http://localhost:5000`.
+
+### Step 7: Run the Frontend
+
+Open a second terminal for the frontend:
+
+```powershell
+cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1\frontend
 npm start
 ```
-React dev server starts at `http://localhost:3000`
 
-### Step 7: Use the App
+The React app should open at `http://localhost:3000`. If it does not open automatically, paste that URL into your browser.
 
-1. Open `http://localhost:3000` in your browser
-2. You'll see the **Tasks** page (main menu)
-3. Use the **VIN search bar** (top-right) to search for a vehicle:
-   - Try searching: `8G60MY`, `F150`, or `XG9369`
-4. Once a vehicle is selected, click any task:
-   - **VEHICLE HISTORY** — view full event timeline
-   - **VEHICLE INQUIRY** — view Logistics, Vehicle Info, and Infleeting details
-   - **CONDITION** — view/add condition reports with damage tracking
-   - **MOVEMENT** — move a vehicle between locations
+### Step 8: Use the App
+
+1. Open `http://localhost:3000`.
+2. Select a role: `Manager`, `Employee`, or `Mechanic`.
+3. Use the dashboard, fleet inventory, reservations, maintenance, and reports tabs.
+4. Manager users can edit vehicle information, add vehicles, add holds, and remove active holds.
+5. Employee users can view the same operational data without edit controls.
+6. Mechanic users can view vehicle-related maintenance information, add maintenance holds, remove maintenance holds, and update vehicle maintenance details.
+
+### Quick Health Checks
+
+To confirm the backend can read the database, open this URL after starting the backend:
+
+```text
+http://localhost:5000/api/vehicles
+```
+
+You should see JSON vehicle data. If the frontend is blank or cannot load data, check that the backend is running and that `backend\.env` uses the same database name, username, password, host, and port that you used when creating the database.
 
 ## Database Schema
 
