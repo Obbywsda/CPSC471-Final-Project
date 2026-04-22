@@ -1,104 +1,189 @@
 # Vehicle Event Manager
 
-**CPSC 471 - Group 21 - Winter 2026**
+Vehicle Event Manager (VEM) is a database-driven rental car fleet tracking system. It centralizes vehicle inventory, rental/event history, maintenance holds, damage reports, odometer updates, license plate information, and role-based workflows into one web application.
 
-A centralized, database-driven web application that consolidates vehicle information, event history, and operational status into a single interface for rental car fleet management.
+This project was built for CPSC 471 as a full-stack application backed by a PostgreSQL relational database.
 
 ## Tech Stack
 
-| Layer    | Technology             |
-|----------|------------------------|
-| Frontend | React.js 18            |
-| Backend  | Node.js + Express      |
-| Database | PostgreSQL             |
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 18, React Router, Axios, Lucide React |
+| Backend | Node.js, Express, pg, dotenv, CORS |
+| Database | PostgreSQL |
+| Styling | Custom CSS |
+| Tooling | npm, Create React App |
+
+## Core Functionality
+
+### Role-Based Access
+
+VEM supports three user roles:
+
+- `Manager`: Full access to fleet data and edit controls.
+- `Employee`: Same fleet visibility as a manager, but read-only.
+- `Mechanic`: Vehicle-focused maintenance view with no reservation tab.
+
+### Fleet Inventory
+
+- View all vehicles in the fleet.
+- Search vehicles by unit number, license plate, or VIN.
+- View vehicle make, model, plate, VIN, location, odometer, next PM, and current status.
+- Add new vehicles as a manager.
+- Edit vehicle details, including license plate and odometer.
+- Delete vehicles as a manager with confirmation.
+- Vehicle deletions remove related database records safely.
+
+### Holds and Vehicle Status
+
+- Add vehicle holds as a manager.
+- Remove individual active holds.
+- Mechanics can add and remove maintenance holds.
+- Vehicle status is derived from database activity:
+  - Active holds show `On Hold`.
+  - Active maintenance shows `In Maintenance`.
+  - Active rentals show `Rented`.
+  - Otherwise the vehicle remains `Available` or its saved status.
+
+### Damage Reports
+
+- Mechanics can add damage reports to a vehicle.
+- Mechanics can edit damage report details.
+- Mechanics can delete damage reports from inside the edit modal.
+- Severe damage reports place the vehicle on hold.
+- Removing the last severe damage report resyncs the vehicle status.
+
+### Dashboard
+
+- The dashboard shows the fleet summary view.
+- Displays total fleet size, available vehicles, in-service vehicles, utilization, status breakdown, cost/utilization style metrics, and summary charts/cards.
+
+### Reservations
+
+- Managers and employees can access reservation workflows.
+- Mechanics do not see or use the reservation tab.
+
+### Database Integration
+
+- Frontend data comes from the Express API.
+- Express API reads and writes to PostgreSQL.
+- The database stores vehicles, registrations, customers, locations, employees, events, holds, rentals, maintenance records, condition checks, damage reports, equipment checks, movement records, and notes.
+
+## Project Structure
+
+```text
+CPSC471-Final-Project-1/
+├── backend/
+│   ├── db.js
+│   ├── server.js
+│   ├── package.json
+│   └── .env.example
+├── database/
+│   └── schema.sql
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   └── package.json
+└── README.md
+```
 
 ## Prerequisites
 
-- **Node.js** v18+ — [https://nodejs.org](https://nodejs.org)
-- **PostgreSQL** v14+ — [https://www.postgresql.org/download](https://www.postgresql.org/download)
+Install these before running the project:
 
-## Setup Instructions
+- Node.js 18 or newer
+- npm
+- PostgreSQL 14 or newer
 
-These steps assume you are running the project on Windows with PowerShell or Command Prompt.
-
-### Step 1: Install PostgreSQL
-
-1. Download and install PostgreSQL from [https://www.postgresql.org/download/windows/](https://www.postgresql.org/download/windows/).
-2. During installation, set a password for the `postgres` user and remember it.
-3. Keep the default port as `5432`.
-4. Make sure the PostgreSQL service is running after installation.
-
-If `psql` is not recognized in Windows Shell, use the full PostgreSQL path instead:
+On Windows, if `psql` is not recognized, use the full PostgreSQL path:
 
 ```powershell
 "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres
 ```
 
-If you installed a different PostgreSQL version, replace `16` with your installed version number. You can also add `C:\Program Files\PostgreSQL\16\bin` to your Windows `Path` environment variable so the shorter `psql` command works everywhere.
+If your PostgreSQL version is not `16`, replace `16` with your installed version.
 
-### Step 2: Install Project Dependencies
+## Local Setup
 
-From the project root:
+### 1. Clone the Repository
 
-```powershell
-cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1
+```bash
+git clone <your-repository-url>
+cd CPSC471-Final-Project-1
+```
 
+### 2. Install Dependencies
+
+Install backend dependencies:
+
+```bash
 cd backend
-npm install
-
-cd ..\frontend
 npm install
 ```
 
-### Step 3: Create the Database
+Install frontend dependencies:
 
-Open PowerShell or Command Prompt and connect to PostgreSQL:
+```bash
+cd ../frontend
+npm install
+```
 
-```powershell
+### 3. Create the PostgreSQL Database
+
+Open a terminal and connect to PostgreSQL:
+
+```bash
 psql -U postgres
 ```
 
-If `psql` is not in your `Path`, use:
-
-```powershell
-"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres
-```
-
-Inside the `psql` prompt, create the database:
+Inside the `psql` prompt, run:
 
 ```sql
 CREATE DATABASE vehicle_event_manager;
 \q
 ```
 
-### Step 4: Populate or Reset the Database
+If the database already exists and you want to recreate it:
 
-Run the schema file from the project root:
-
-```powershell
-cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1
-psql -U postgres -d vehicle_event_manager -f database\schema.sql
+```sql
+DROP DATABASE vehicle_event_manager;
+CREATE DATABASE vehicle_event_manager;
+\q
 ```
 
-If `psql` is not in your `Path`, use:
+### 4. Populate the Database
+
+From the project root, run:
+
+```bash
+psql -U postgres -d vehicle_event_manager -f database/schema.sql
+```
+
+On Windows, if `psql` is not in your PATH:
 
 ```powershell
-cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1
 "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -d vehicle_event_manager -f database\schema.sql
 ```
 
-This command creates all database tables and inserts the sample rental fleet data. The schema file starts by dropping existing tables, so running it again will reset the database back to the sample data.
+The schema file creates the tables and inserts sample fleet data. Running it again resets the database back to the sample data.
 
-### Step 5: Configure the Backend Database Connection
+### 5. Configure Backend Environment Variables
 
-Create a backend environment file from the example:
+Create a backend `.env` file:
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+On Windows Command Prompt or PowerShell:
 
 ```powershell
-cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1\backend
+cd backend
 copy .env.example .env
 ```
 
-Open `backend\.env` and make sure the values match your PostgreSQL setup:
+Update `backend/.env` if needed:
 
 ```env
 DB_USER=postgres
@@ -109,91 +194,173 @@ DB_NAME=vehicle_event_manager
 PORT=5000
 ```
 
-If your PostgreSQL password is not `postgres`, change `DB_PASSWORD` to the password you set during installation.
+Change `DB_PASSWORD` to match the PostgreSQL password you set during installation.
 
-### Step 6: Run the Backend
+## Running the Project
 
-Open a terminal for the backend:
+You need two terminals: one for the backend and one for the frontend.
 
-```powershell
-cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1\backend
+### Terminal 1: Start the Backend
+
+```bash
+cd backend
 npm start
 ```
 
-The backend API should start on `http://localhost:5000`.
+The API runs at:
 
-### Step 7: Run the Frontend
-
-Open a second terminal for the frontend:
-
-```powershell
-cd C:\Users\s_cha\Documents\Coding\CPSC471\CPSC471-Final-Project-1\frontend
-npm start
+```text
+http://localhost:5000
 ```
 
-The React app should open at `http://localhost:3000`. If it does not open automatically, paste that URL into your browser.
-
-### Step 8: Use the App
-
-1. Open `http://localhost:3000`.
-2. Select a role: `Manager`, `Employee`, or `Mechanic`.
-3. Use the dashboard, fleet inventory, reservations, maintenance, and reports tabs.
-4. Manager users can edit vehicle information, add vehicles, add holds, and remove active holds.
-5. Employee users can view the same operational data without edit controls.
-6. Mechanic users can view vehicle-related maintenance information, add maintenance holds, remove maintenance holds, and update vehicle maintenance details.
-
-### Quick Health Checks
-
-To confirm the backend can read the database, open this URL after starting the backend:
+Quick backend check:
 
 ```text
 http://localhost:5000/api/vehicles
 ```
 
-You should see JSON vehicle data. If the frontend is blank or cannot load data, check that the backend is running and that `backend\.env` uses the same database name, username, password, host, and port that you used when creating the database.
+You should see JSON vehicle data.
 
-## Database Schema
+### Terminal 2: Start the Frontend
 
-**15 tables** mapped from the Enhanced Entity-Relationship Diagram:
+```bash
+cd frontend
+npm start
+```
 
-| Table | Type | Description |
-|-------|------|-------------|
-| `location` | Strong Entity | Branch/lot locations |
-| `employee` | Strong Entity | Fleet employees |
-| `vehicle` | Strong Entity | Vehicle fleet inventory |
-| `customer` | Strong Entity | Rental customers |
-| `customer_phone` | Multivalued Attr | Customer phone numbers |
-| `event` | Superclass | All vehicle events (disjoint total specialization) |
-| `condition_check` | Subclass of Event | Vehicle condition inspections |
-| `rental` | Subclass of Event | Customer rental transactions |
-| `maintenance` | Subclass of Event | Maintenance/repair records |
-| `hold` | Subclass of Event | Vehicle hold statuses |
-| `movement` | Subclass of Event | Vehicle location transfers |
-| `note` | Subclass of Event | Free-text notes |
-| `registration` | Weak Entity | License plate registrations (VIN, plate) |
-| `damage_report` | Weak Entity | Condition damage records (event_id, body_area) |
-| `equipment` | Related Entity | Equipment check items for condition checks |
+The React app runs at:
 
-## EERD Concepts Implemented
+```text
+http://localhost:3000
+```
 
-- **Disjoint total specialization** on EVENT (6 subclasses sharing `event_id` as PK/FK)
-- **Weak entities**: `registration` (identified by VIN + plate), `damage_report` (identified by event_id + body_area)
-- **Multivalued attribute**: `customer_phone` table
-- **Derived attribute**: `vehicle_age` (computed view using current date minus model year)
+Open that URL in your browser and select a role to begin.
 
-## API Endpoints
+## Useful Development Commands
+
+Run the backend:
+
+```bash
+cd backend
+npm start
+```
+
+Run the backend with nodemon:
+
+```bash
+cd backend
+npm run dev
+```
+
+Run the frontend:
+
+```bash
+cd frontend
+npm start
+```
+
+Build the frontend:
+
+```bash
+cd frontend
+npm run build
+```
+
+Reset and repopulate the database:
+
+```bash
+psql -U postgres -d vehicle_event_manager -f database/schema.sql
+```
+
+## Database Overview
+
+The database includes these main tables:
+
+| Table | Purpose |
+| --- | --- |
+| `vehicle` | Stores fleet vehicle records |
+| `registration` | Stores vehicle license plate registrations |
+| `location` | Stores branch and lot locations |
+| `employee` | Stores employee records |
+| `customer` | Stores rental customer records |
+| `customer_phone` | Stores customer phone numbers |
+| `event` | Superclass table for vehicle events |
+| `rental` | Rental-specific event data |
+| `maintenance` | Maintenance-specific event data |
+| `hold` | Vehicle hold add/remove records |
+| `movement` | Vehicle location movement records |
+| `condition_check` | Inspection and condition check records |
+| `damage_report` | Damage records tied to condition events |
+| `equipment` | Equipment checklist records |
+| `note` | Free-text event notes |
+
+## API Highlights
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/vehicles` | List all vehicles |
-| GET | `/api/vehicles/search?q=` | Search by VIN/unit#/plate |
-| GET | `/api/vehicles/:id` | Get vehicle by VIN or unit# |
-| GET | `/api/vehicles/:vin/registration` | Get registration info |
-| PUT | `/api/vehicles/:vin` | Update vehicle fields |
-| GET | `/api/events/vehicle/:vin` | Get event history for a vehicle |
-| POST | `/api/events` | Create a new event |
-| GET | `/api/conditions/:eventId` | Get condition check details |
-| GET | `/api/conditions/damages/:vin` | Get all damage reports for a vehicle |
-| GET | `/api/employees` | List all employees |
-| GET | `/api/locations` | List all locations |
-| GET | `/api/customers` | List all customers |
+| --- | --- | --- |
+| `GET` | `/api/vehicles` | List all vehicles |
+| `GET` | `/api/vehicles/search?q=...` | Search vehicles by unit number, license plate, VIN, make, or model |
+| `GET` | `/api/vehicles/:vin` | Get one vehicle by VIN or unit number |
+| `POST` | `/api/vehicles` | Add a vehicle |
+| `PUT` | `/api/vehicles/:vin` | Update vehicle information |
+| `DELETE` | `/api/vehicles/:vin` | Delete a vehicle and related records |
+| `GET` | `/api/events/vehicle/:vin` | Get vehicle history |
+| `POST` | `/api/events` | Create a vehicle event |
+| `GET` | `/api/conditions/damages/:vin` | Get damage reports for a vehicle |
+| `POST` | `/api/conditions/damages` | Add a damage report |
+| `PUT` | `/api/conditions/damages/:eventId/:bodyArea` | Update a damage report |
+| `DELETE` | `/api/conditions/damages/:eventId/:bodyArea` | Delete a damage report |
+| `GET` | `/api/reservations` | List reservations |
+| `POST` | `/api/reservations` | Create a reservation |
+| `GET` | `/api/locations` | List locations |
+| `GET` | `/api/customers` | List customers |
+| `GET` | `/api/employees` | List employees |
+
+## Troubleshooting
+
+### `psql` is not recognized
+
+Use the full PostgreSQL executable path:
+
+```powershell
+"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres
+```
+
+Or add this folder to your system PATH:
+
+```text
+C:\Program Files\PostgreSQL\16\bin
+```
+
+### Frontend loads but data is missing
+
+Check that:
+
+- PostgreSQL is running.
+- The backend is running on port `5000`.
+- `backend/.env` has the correct database username, password, host, port, and database name.
+- The database was populated with `database/schema.sql`.
+
+### Backend says database authentication failed
+
+Update `DB_PASSWORD` in `backend/.env` to match your local PostgreSQL password, then restart the backend.
+
+### Changes are not showing in the browser
+
+Restart the frontend:
+
+```bash
+cd frontend
+npm start
+```
+
+If backend route or SQL changes were made, restart the backend too:
+
+```bash
+cd backend
+npm start
+```
+
+## License
+
+This project was created for academic coursework.
